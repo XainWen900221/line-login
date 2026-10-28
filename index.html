@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>家屬視訊通知綁定</title>
+<style>
+  body { margin:0; padding:24px; background:#f8fafc; color:#0f172a; font:20px/1.6 system-ui, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+  h1 { font-size:26px; margin:0 0 12px; }
+  .note { background:#fff7ed; border:1px solid #fdba74; border-radius:12px; padding:12px 16px; }
+  button { display:block; width:100%; margin-top:20px; padding:16px; font-size:22px; font-weight:bold; color:#fff;
+           background:#16a34a; border:0; border-radius:14px; }
+  button[disabled] { opacity:.5; }
+  .bad { color:#b91c1c; }
+</style>
+</head>
+<body>
+<h1>家屬視訊通知綁定</h1>
+<p id="msg">處理中…</p>
+<p class="note">請先確認手機已連上<b>醫院的 Wi-Fi</b>，再按下方按鈕。</p>
+<form id="form" method="post">
+  <input type="hidden" name="c" id="c"><input type="hidden" name="t" id="t">
+  <button id="send" type="submit" disabled>送出給護理站</button>
+</form>
+<!-- 這一頁只在家屬手機上執行：向 LINE 取得登入證明後，用表單（不放在網址裡）直接交給同一個 Wi-Fi 上的護理站主機。 -->
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+"use strict";
+// 部署設定：兩個值都要和 Jetson .env 的 LIFF_ID、LINE_BIND_PUBLIC_URL 一致
+const LIFF_ID = "2012261135-hrMxtLXw";                    // LINE Developers → LINE Login 頻道 → LIFF
+const JETSON = "http://192.168.50.21:5004";  // 只接受內網 IP（不從 QR code 讀，避免被改成別的地方）
+
+const msg = document.getElementById("msg"), send = document.getElementById("send");
+function privateOrigin(u) {
+  try {
+    const x = new URL(u);
+    const ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(x.hostname);
+    if (x.protocol !== "http:" || !ip || ip.slice(1).some((n) => +n > 255)) return null;
+    const [a, b] = [+ip[1], +ip[2]];
+    return a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) ? x.origin : null;
+  } catch { return null; }
+}
+(async () => {
+  const target = privateOrigin(JETSON);
+  if (!target) { msg.className = "bad"; msg.textContent = "這一頁尚未設定完成，請通知護理站。"; return; }
+  await liff.init({ liffId: LIFF_ID });
+  const code = new URLSearchParams(location.search).get("c");     // LIFF 會在 init 後還原網址參數
+  if (!code || !/^[A-Za-z0-9_-]{16}$/.test(code)) {
+    msg.className = "bad"; msg.textContent = "QR code 不完整，請請護理師重新產生。"; return;
+  }
+  if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+  const token = liff.getIDToken();
+  if (!token) { msg.className = "bad"; msg.textContent = "沒有拿到 LINE 登入證明，請關閉後重新掃描。"; return; }
+  document.getElementById("form").action = target + "/line-bind";
+  document.getElementById("c").value = code;
+  document.getElementById("t").value = token;
+  msg.textContent = "LINE 登入完成。";
+  send.disabled = false;
+  document.getElementById("form").onsubmit = () => {
+    send.disabled = true; msg.textContent = "送出中…（如果一直沒有反應，請確認已連上醫院 Wi-Fi）";
+  };
+})().catch((e) => { msg.className = "bad"; msg.textContent = "發生錯誤：" + (e && e.message ? e.message : e); });
+</script>
+</body>
+</html>
