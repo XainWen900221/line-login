@@ -18,11 +18,10 @@
 <h1>家屬視訊通知綁定</h1>
 <p id="msg">處理中…</p>
 <p class="note">請先確認手機已連上<b>醫院的 Wi-Fi</b>，再按下方按鈕。</p>
-<form id="form" method="post">
-  <input type="hidden" name="c" id="c"><input type="hidden" name="t" id="t">
-  <button id="send" type="submit" disabled>送出給護理站</button>
-</form>
-<!-- 這一頁只在家屬手機上執行：向 LINE 取得登入證明後，用表單（不放在網址裡）直接交給同一個 Wi-Fi 上的護理站主機。 -->
+<button id="send" type="button" disabled>送出給護理站</button>
+<!-- 這一頁只在家屬手機上執行：向 LINE 取得登入證明後，直接交給同一個 Wi-Fi 上的護理站主機。
+     LINE 的瀏覽器跳往別的網站時會重新打開網址（表單 POST 內容會掉），所以證明放在 # 後面：
+     # 後面不會送到任何伺服器，護理站主機的頁面讀出後立刻從網址清掉，再自己送出。 -->
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 "use strict";
@@ -51,13 +50,11 @@ function privateOrigin(u) {
   if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
   const token = liff.getIDToken();
   if (!token) { msg.className = "bad"; msg.textContent = "沒有拿到 LINE 登入證明，請關閉後重新掃描。"; return; }
-  document.getElementById("form").action = target + "/line-bind";
-  document.getElementById("c").value = code;
-  document.getElementById("t").value = token;
   msg.textContent = "LINE 登入完成。";
   send.disabled = false;
-  document.getElementById("form").onsubmit = () => {
+  send.onclick = () => {
     send.disabled = true; msg.textContent = "送出中…（如果一直沒有反應，請確認已連上醫院 Wi-Fi）";
+    location.href = target + "/line-bind#" + new URLSearchParams({ c: code, t: token });
   };
 })().catch((e) => { msg.className = "bad"; msg.textContent = "發生錯誤：" + (e && e.message ? e.message : e); });
 </script>
